@@ -67,12 +67,27 @@ function draw(t){
   fx.setTransform(1,0,0,1,0,0);fx.globalCompositeOperation="xor";fx.drawImage(tl,0,0);
   fx.globalCompositeOperation="destination-in";fx.setTransform(s,0,0,s,-X0*s,-Y0*s);fx.fillRect(X0-80,Y0-80,FW+160,BASE-Y0+80);fx.globalCompositeOperation="source-over";   // recoupe à la ligne de sol
   ctx.drawImage(fig,0,0);ctx.restore()}
-const FIX=q.has("t");let st=null,vis=true,done=false;
-if("IntersectionObserver"in window)new IntersectionObserver(e=>{vis=e[0].isIntersecting;if(vis&&st===null&&!FIX&&!reduce)start()}).observe(cv);
-function start(){st=performance.now();done=false;requestAnimationFrame(loop)}
-function loop(now){if(done||!vis)return;const t=(now-st)/1e3;if(t>=T){draw(T);done=true;return}draw(t);requestAnimationFrame(loop)}
-if(FIX)draw(parseFloat(q.get("t")));else if(reduce)draw(T);else{draw(0);start()}
-function replay(){if(!FIX&&!reduce){st=null;start()}}
+const FIX=q.has("t");
+// Lecture : le temps de l'animation n'avance que lorsque le cadre est réellement visible à l'écran.
+// Elle démarre au début quand on arrive sur le cadre, se met en pause quand on le quitte, et reprend là où elle en était.
+let tt=0,last=0,running=false,done=false,seen=false;
+function frame(now){
+  if(!running)return;
+  tt+=Math.min(.1,(now-last)/1e3);last=now;                      // plafonné : pas de saut après une pause ou un ralentissement du navigateur
+  if(tt>=T){draw(T);done=true;running=false;return}
+  draw(tt);requestAnimationFrame(frame)}
+function play(){if(done||running||FIX||reduce)return;running=true;last=performance.now();requestAnimationFrame(frame)}
+function pause(){running=false}
+function replay(){if(FIX||reduce)return;tt=0;done=false;draw(0);running=false;play()}
+if(FIX)draw(parseFloat(q.get("t")));
+else if(reduce)draw(T);
+else{
+  draw(0);                                                          // première image : la forme et les premiers arbres déjà en route
+  if("IntersectionObserver"in window){
+    new IntersectionObserver(es=>{seen=true;if(es[es.length-1].isIntersecting)play();else pause()},{threshold:.3}).observe(cv);
+    setTimeout(()=>{if(!seen&&!document.hidden)play()},2500);       // sécurité : si le navigateur ne signale rien, on démarre quand même
+  }else play();
+}
 cv.addEventListener("click",replay);addEventListener("keydown",e=>{if(e.code==="Space"){e.preventDefault();replay()}});
 </script>
 </body>

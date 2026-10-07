@@ -10,7 +10,7 @@
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 html,body{height:100%;margin:0}
 body{background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden}
-canvas{display:block;width:min(100vw,calc(100vh * 3 / 2));aspect-ratio:3/2;height:auto;max-width:100%}
+canvas{pointer-events:none;user-select:none;-webkit-user-select:none;display:block;width:min(100vw,calc(100vh * 3 / 2));aspect-ratio:3/2;height:auto;max-width:100%}
 </style>
 </head>
 <body>
@@ -67,28 +67,23 @@ function draw(t){
   fx.setTransform(1,0,0,1,0,0);fx.globalCompositeOperation="xor";fx.drawImage(tl,0,0);
   fx.globalCompositeOperation="destination-in";fx.setTransform(s,0,0,s,-X0*s,-Y0*s);fx.fillRect(X0-80,Y0-80,FW+160,BASE-Y0+80);fx.globalCompositeOperation="source-over";   // recoupe à la ligne de sol
   ctx.drawImage(fig,0,0);ctx.restore()}
-const FIX=q.has("t");
-// Lecture : le temps de l'animation n'avance que lorsque le cadre est réellement visible à l'écran.
-// Elle démarre au début quand on arrive sur le cadre, se met en pause quand on le quitte, et reprend là où elle en était.
-let tt=0,last=0,running=false,done=false,seen=false;
+const FIX=q.has("t"),HOLD=2.6,CYC=T+HOLD,FADE=.35;
+// Lecture automatique en boucle, sans aucun contrôle ni pause : l'animation (7,7 s) s'arrête 2,6 s sur le logo, s'efface, puis recommence.
+// Le temps est lu sur l'horloge : rien ne peut la figer. Au premier affichage réel du cadre, on repart du début.
+let t0=performance.now(),lastT=-1;
 function frame(now){
-  if(!running)return;
-  tt+=Math.min(.1,(now-last)/1e3);last=now;                      // plafonné : pas de saut après une pause ou un ralentissement du navigateur
-  if(tt>=T){draw(T);done=true;running=false;return}
-  draw(tt);requestAnimationFrame(frame)}
-function play(){if(done||running||FIX||reduce)return;running=true;last=performance.now();requestAnimationFrame(frame)}
-function pause(){running=false}
-function replay(){if(FIX||reduce)return;tt=0;done=false;draw(0);running=false;play()}
-if(FIX)draw(parseFloat(q.get("t")));
-else if(reduce)draw(T);
-else{
-  draw(0);                                                          // première image : la forme et les premiers arbres déjà en route
-  if("IntersectionObserver"in window){
-    new IntersectionObserver(es=>{seen=true;if(es[es.length-1].isIntersecting)play();else pause()},{threshold:.3}).observe(cv);
-    setTimeout(()=>{if(!seen&&!document.hidden)play()},2500);       // sécurité : si le navigateur ne signale rien, on démarre quand même
-  }else play();
+  requestAnimationFrame(frame);
+  const tc=((now-t0)/1e3)%CYC;
+  cv.style.opacity=Math.min(ss(tc/FADE),1-ss((tc-(CYC-FADE))/FADE)).toFixed(3);   // fondu à la jonction fin → début
+  const t=Math.min(tc,T);
+  if(t<T||lastT<T){draw(t);lastT=t}                                              // pendant l'arrêt sur le logo, inutile de redessiner
 }
-cv.addEventListener("click",replay);addEventListener("keydown",e=>{if(e.code==="Space"){e.preventDefault();replay()}});
+if(FIX)draw(parseFloat(q.get("t")));
+else if(reduce)draw(T);                                                           // mouvement réduit : le logo final, immobile
+else{
+  draw(0);requestAnimationFrame(frame);
+  if("IntersectionObserver"in window)new IntersectionObserver((es,ob)=>{if(es[es.length-1].isIntersecting){t0=performance.now();ob.disconnect()}},{threshold:.3}).observe(cv)
+}
 </script>
 </body>
 </html>
